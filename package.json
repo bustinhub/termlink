@@ -1,0 +1,25 @@
+{
+  "name": "relay-private-chat",
+  "version": "1.7.0",
+  "private": true,
+  "description": "RELAY private friend messenger with license keys, groups, media and moderation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "start:render-legacy": "node src/server.js",
+    "postinstall": "node render-bootstrap.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.1",
+    "dotenv": "^17.2.2"
+  }
+}

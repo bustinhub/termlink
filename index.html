@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#050505" />
+  <title>RELAY</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <canvas id="networkBg" class="network-bg" aria-hidden="true"></canvas>
+  <div id="toastRoot" class="toast-root"></div>
+
+  <main id="gateView" class="auth-shell hidden">
+    <div class="auth-stage">
+      <h1 class="wordmark">RELAY</h1>
+      <form id="gateForm" class="auth-card">
+        <label>LICENSE KEY<input id="gatePasscode" type="password" autocomplete="off" placeholder="RLY-XXXX-XXXX-XXXX-XXXX" /></label>
+        <button class="primary" type="submit">ENTER</button>
+      </form>
+    </div>
+  </main>
+
+  <main id="authView" class="auth-shell hidden">
+    <div class="auth-stage">
+      <h1 class="wordmark">RELAY</h1>
+      <section class="auth-card auth-box">
+        <div class="auth-tabs">
+          <button type="button" data-auth-tab="login" class="active">SIGN IN</button>
+          <button type="button" data-auth-tab="register">CREATE ACCOUNT</button>
+        </div>
+        <form id="loginForm" class="auth-pane">
+          <label>USERNAME<input id="loginUsername" autocomplete="username" placeholder="USERNAME" /></label>
+          <label>PASSWORD<input id="loginPassword" type="password" autocomplete="current-password" placeholder="PASSWORD" /></label>
+          <button class="primary" type="submit">SIGN IN</button>
+        </form>
+        <form id="registerForm" class="auth-pane hidden">
+          <label>DISPLAY NAME<input id="registerDisplay" maxlength="40" placeholder="DISPLAY NAME" /></label>
+          <label>USERNAME<input id="registerUsername" maxlength="24" autocomplete="username" placeholder="USERNAME" /></label>
+          <label>PASSWORD<input id="registerPassword" type="password" minlength="8" autocomplete="new-password" placeholder="MIN. 8 CHARACTERS" /></label>
+          <button class="primary" type="submit">CREATE ACCOUNT</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <main id="appView" class="app-shell hidden">
+    <section class="messenger">
+      <aside class="sidebar">
+        <header class="side-head">
+          <button id="brandBtn" class="brand">RELAY</button>
+          <div class="side-actions">
+            <button id="adminBtn" class="admin-mini hidden" title="Admin panel">ADMIN</button>
+            <button id="settingsBtn" class="me-mini" title="Settings"></button>
+          </div>
+        </header>
+
+        <nav class="main-tabs">
+          <button class="active" data-main-tab="chats">CHATS</button>
+          <button id="newGroupBtn" class="tab-plus" title="New group chat">+</button>
+          <button data-main-tab="friends">FRIENDS <span id="requestBadge" class="nav-badge hidden"></span></button>
+        </nav>
+
+        <section id="chatsSide" class="side-pane">
+          <div id="conversationList" class="conversation-list"></div>
+        </section>
+
+        <section id="friendsSide" class="side-pane hidden">
+          <form id="friendSearchForm" class="friend-search">
+            <input id="friendSearch" autocomplete="off" placeholder="ADD FRIEND" />
+            <button type="submit">FIND</button>
+          </form>
+          <div class="friend-filter">
+            <button class="active" data-friend-filter="friends">FRIENDS</button>
+            <button data-friend-filter="requests">REQUESTS</button>
+          </div>
+          <div id="friendSearchResults" class="search-results hidden"></div>
+          <div id="friendsList" class="friends-list"></div>
+        </section>
+
+        <footer class="side-foot">
+          <span class="avatar" id="meAvatar"></span>
+          <span class="me-copy"><b id="meDisplay"></b><small id="meUsername"></small></span>
+          <span id="connectionDot" class="connection-dot" title="Connection"></span>
+        </footer>
+      </aside>
+
+      <section class="content">
+        <section id="emptyPanel" class="empty-panel panel-view"><div class="empty-mark">R</div></section>
+        <section id="chatPanel" class="chat-panel panel-view hidden">
+          <header class="content-head chat-head">
+            <button class="mobile-back" data-mobile-back>‹</button>
+            <span class="avatar" id="chatAvatar"></span>
+            <div class="peer-copy"><b id="chatName"></b><small id="chatPresence"></small></div>
+            <button id="pingBtn" class="quiet-btn">PING</button>
+          </header>
+          <div id="messageList" class="message-list"></div>
+          <div id="typingLine" class="typing-line"></div>
+          <div id="attachmentDraft" class="attachment-draft hidden"></div>
+          <form id="composer" class="composer">
+            <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            <button id="attachBtn" class="attach-btn" type="button" title="Attach image">+</button>
+            <textarea id="messageInput" maxlength="4000" rows="1" placeholder="MESSAGE"></textarea>
+            <button class="send-btn" type="submit">SEND</button>
+          </form>
+        </section>
+      </section>
+
+      <aside id="adminDrawer" class="admin-drawer hidden" aria-label="Admin panel"></aside>
+    </section>
+  </main>
+
+  <div id="modalRoot" class="modal-root hidden"></div>
+  <script src="/network.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

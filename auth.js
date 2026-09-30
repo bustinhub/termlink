@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('node:crypto');
 
 const MASTER_PASSCODE = 'boisverysigma123';
-const GATE_VERSION = 'relay-license-gate-v2';
+const GATE_VERSION = 'relay-site-code-v3';
 const secret = () => process.env.JWT_SECRET || 'dev-only-change-me';
 
 function sign(payload, expiresIn = '7d') {

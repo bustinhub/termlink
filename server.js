@@ -188,11 +188,13 @@ app.post('/api/auth/register', authLimiter, requireGate, async (req, res) => {
   if (error) return res.status(500).json({ error: 'REGISTER_FAILED' });
 
   if (license) {
-    const { error: licenseError } = await supabase.from('license_keys')
+    const { data: consumed, error: licenseError } = await supabase.from('license_keys')
       .update({ uses: license.uses + 1, last_used_at: new Date().toISOString() })
       .eq('id', license.id)
-      .eq('uses', license.uses);
-    if (licenseError) {
+      .eq('uses', license.uses)
+      .select('id')
+      .maybeSingle();
+    if (licenseError || !consumed) {
       await supabase.from('users').delete().eq('id', data.id);
       return res.status(409).json({ error: 'LICENSE_RETRY' });
     }

@@ -17,8 +17,8 @@ UI changes in v1.8:
 Private friend messenger built for GitHub -> Render + Supabase.
 
 ## What changed
-- License-key gate. Owner master code remains `boisverysigma123`.
-- `alex` is promoted to owner/admin by the SQL migration and server fallback.
+- Site access code is `boisverysigma123`; license keys are consumed when users create accounts.
+- `keymaster` is promoted to owner/admin by the SQL migration and server fallback.
 - Admin panel: user search, ban/unban, mod assignment, DM/group chat inspection.
 - Admin license-key generator with label, max uses, expiration and revocation.
 - Consecutive messages from the same sender within 5 minutes render as one message block.
@@ -33,7 +33,7 @@ It is written as an upgrade script, so it can be run on the existing RELAY datab
 
 The script:
 - adds admin/mod/ban columns,
-- promotes username `alex` to admin,
+- promotes username `keymaster` to admin,
 - adds license keys + moderation logs,
 - adds groups + group messages,
 - adds image attachment columns,
@@ -49,4 +49,4 @@ Environment variables:
 - `JWT_SECRET=<long random string>`
 - `SUPABASE_URL=<project URL>`
 - `SUPABASE_SERVICE_ROLE_KEY=<Supabase secret/service-role key>`
-- optional `OWNER_USERNAME=alex`
+- optional `OWNER_USERNAME=keymaster`

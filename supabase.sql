@@ -20,7 +20,7 @@ do $$ begin
     alter table public.users add constraint users_role_check check (role in ('user','mod','admin'));
   end if;
 end $$;
-update public.users set role='admin', is_banned=false, ban_reason='' where username='alex';
+update public.users set role='admin', is_banned=false, ban_reason='' where username='keymaster';
 
 create table if not exists public.friendships (
   id uuid primary key default gen_random_uuid(), sender_id uuid not null references public.users(id) on delete cascade,

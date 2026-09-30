@@ -17,7 +17,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: false } });
 const PORT = Number(process.env.PORT || 3000);
 const production = process.env.NODE_ENV === 'production';
-const OWNER_USERNAME = cleanUsername(process.env.OWNER_USERNAME || 'alex');
+const OWNER_USERNAME = cleanUsername(process.env.OWNER_USERNAME || 'keymaster');
 const MESSAGE_HISTORY_LIMIT = 100;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MEDIA_BUCKET = 'chat-media';
@@ -149,24 +149,10 @@ app.get('/api/bootstrap', async (req, res) => {
 
 app.post('/api/gate', gateLimiter, async (req, res) => {
   const provided = String(req.body?.passcode || '').trim();
-  if (!provided) return res.status(401).json({ error: 'INVALID_LICENSE' });
-  let licenseId = null;
-  let expiresIn = '30d';
-  if (provided !== sitePasscode()) {
-    const { data: key } = await supabase.from('license_keys').select('*').eq('key_hash', licenseHash(provided)).maybeSingle();
-    const now = Date.now();
-    if (!key || !key.is_active || (key.expires_at && new Date(key.expires_at).getTime() <= now) || key.uses >= key.max_uses) {
-      return res.status(401).json({ error: 'INVALID_LICENSE' });
-    }
-    licenseId = key.id;
-    const { error } = await supabase.from('license_keys').update({ uses: key.uses + 1, last_used_at: new Date().toISOString() }).eq('id', key.id).eq('uses', key.uses);
-    if (error) return res.status(409).json({ error: 'LICENSE_RETRY' });
-    if (key.expires_at) {
-      const days = Math.max(1, Math.ceil((new Date(key.expires_at).getTime() - now) / 86400000));
-      expiresIn = `${Math.min(days, 30)}d`;
-    }
+  if (!provided || provided !== sitePasscode()) {
+    return res.status(401).json({ error: 'INVALID_SITE_CODE' });
   }
-  res.cookie('site_access', sign({ scope: 'site', gate: gateFingerprint(), licenseId, master: !licenseId }, expiresIn), cookieOptions(30));
+  res.cookie('site_access', sign({ scope: 'site', gate: gateFingerprint(), master: true }, '30d'), cookieOptions(30));
   res.json({ ok: true });
 });
 
@@ -174,15 +160,44 @@ app.post('/api/auth/register', authLimiter, requireGate, async (req, res) => {
   const username = cleanUsername(req.body?.username);
   const displayName = String(req.body?.displayName || '').trim();
   const password = String(req.body?.password || '');
+  const providedLicense = String(req.body?.licenseKey || '').trim();
+
   if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({ error: 'USERNAME_RULES' });
   if (displayName.length < 1 || displayName.length > 40) return res.status(400).json({ error: 'DISPLAY_NAME_RULES' });
   if (password.length < 8 || password.length > 128) return res.status(400).json({ error: 'PASSWORD_RULES' });
+
   const { data: existing } = await supabase.from('users').select('id').eq('username', username).maybeSingle();
   if (existing) return res.status(409).json({ error: 'USERNAME_TAKEN' });
+
+  const isOwner = username === OWNER_USERNAME;
+  let license = null;
+
+  if (!isOwner) {
+    if (!providedLicense) return res.status(401).json({ error: 'LICENSE_REQUIRED' });
+    const { data: key } = await supabase.from('license_keys').select('*').eq('key_hash', licenseHash(providedLicense)).maybeSingle();
+    const now = Date.now();
+    if (!key || !key.is_active || (key.expires_at && new Date(key.expires_at).getTime() <= now) || key.uses >= key.max_uses) {
+      return res.status(401).json({ error: 'INVALID_LICENSE' });
+    }
+    license = key;
+  }
+
   const password_hash = await bcrypt.hash(password, 12);
-  const role = username === OWNER_USERNAME ? 'admin' : 'user';
+  const role = isOwner ? 'admin' : 'user';
   const { data, error } = await supabase.from('users').insert({ username, display_name: displayName, password_hash, role }).select('*').single();
   if (error) return res.status(500).json({ error: 'REGISTER_FAILED' });
+
+  if (license) {
+    const { error: licenseError } = await supabase.from('license_keys')
+      .update({ uses: license.uses + 1, last_used_at: new Date().toISOString() })
+      .eq('id', license.id)
+      .eq('uses', license.uses);
+    if (licenseError) {
+      await supabase.from('users').delete().eq('id', data.id);
+      return res.status(409).json({ error: 'LICENSE_RETRY' });
+    }
+  }
+
   res.cookie('session', sign({ scope: 'user', userId: data.id, username: data.username }, '14d'), cookieOptions(14));
   res.json({ user: publicUser(data) });
 });

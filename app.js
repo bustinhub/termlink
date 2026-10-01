@@ -100,12 +100,64 @@ function renderMessages(){
   el.innerHTML=groupMessageRuns(state.messages).map(g=>{
     const u=state.messageUsers[g.sender_id]||{display_name:g.sender_id===state.me.id?state.me.display_name:'USER',username:'user'};
     const own=g.sender_id===state.me.id;
-    return `<section class="message-group ${own?'mine':''}">${avatarHtml(u,'msg-avatar')}<div class="message-stack"><div class="message-group-meta"><b>${esc(u.display_name)}</b><time>${esc(fmtDateTime(g.first_at))}</time></div>${g.messages.map((m,i)=>`<div class="message-line ${i?'continuation':''}" data-message="${m.id}"><div class="message-content">${m.deleted_at?'<em>MESSAGE DELETED</em>':linkify(m.content||'')}</div>${m.attachment_type==='image'&&m.attachment_url?`<a class="message-image-link" href="${esc(m.attachment_url)}" target="_blank" rel="noopener noreferrer"><img class="message-image" src="${esc(m.attachment_url)}" alt="${esc(m.attachment_name||'image')}" loading="lazy"></a>`:''}${(own||['admin','mod'].includes(state.me.role))?`<button class="message-delete" data-delete="${m.id}">×</button>`:''}</div>`).join('')}</div></section>`;
+    return `<section class="message-group ${own?'mine':''}">${avatarHtml(u,'msg-avatar')}<div class="message-stack"><div class="message-group-meta"><b>${esc(u.display_name)}</b><time>${esc(fmtDateTime(g.first_at))}</time></div>${g.messages.map((m,i)=>`<div class="message-line ${i?'continuation':''}" data-message="${m.id}"><div class="message-content">${m.deleted_at?'<em>MESSAGE DELETED</em>':linkify(m.content||'')}</div>${m.attachment_type==='image'&&m.attachment_url?`<a class="message-image-link" href="${esc(m.attachment_url)}" target="_blank" rel="noopener noreferrer"><img class="message-image" src="${esc(m.attachment_url)}" alt="${esc(m.attachment_name||'image')}" loading="lazy"></a>`:''}${(!m._pending&&(own||['admin','mod'].includes(state.me.role)))?`<button class="message-delete" data-delete="${m.id}">×</button>`:''}</div>`).join('')}</div></section>`;
   }).join('');
   $$('#messageList [data-delete]').forEach(b=>b.onclick=()=>deleteMessage(b.dataset.delete));
   if(nearBottom||state.messages.length<8)el.scrollTop=el.scrollHeight;
 }
-async function sendMessage(e){e.preventDefault();if(!state.active)return;const content=$('#messageInput').value.trim();if(!content&&!state.pendingAttachment)return;const body=JSON.stringify({content,attachment:state.pendingAttachment});try{const url=state.active.type==='dm'?`/api/messages/${state.active.id}`:`/api/groups/${state.active.id}/messages`;await api(url,{method:'POST',body});$('#messageInput').value='';state.pendingAttachment=null;renderAttachmentDraft();resizeComposer();stopTyping()}catch{toast('SEND FAILED')}}
+async function sendMessage(e){
+  e.preventDefault();
+  if(!state.active)return;
+  const content=$('#messageInput').value.trim();
+  const attachment=state.pendingAttachment;
+  if(!content&&!attachment)return;
+  const activeSnapshot={...state.active};
+  const tempId='pending-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+  const pendingMessage={
+    id:tempId,
+    sender_id:state.me.id,
+    content,
+    attachment_url:attachment?.url||null,
+    attachment_path:attachment?.path||null,
+    attachment_type:attachment?.type||null,
+    attachment_name:attachment?.name||null,
+    created_at:new Date().toISOString(),
+    _pending:true
+  };
+  if(activeSnapshot.type==='dm')pendingMessage.receiver_id=activeSnapshot.id;
+  else pendingMessage.group_id=activeSnapshot.id;
+  state.messageUsers[state.me.id]=state.me;
+  state.messages.push(pendingMessage);
+  state.messages=state.messages.slice(-100);
+  $('#messageInput').value='';
+  state.pendingAttachment=null;
+  renderAttachmentDraft();
+  resizeComposer();
+  stopTyping();
+  renderMessages();
+  try{
+    const url=activeSnapshot.type==='dm'?'/api/messages/'+activeSnapshot.id:'/api/groups/'+activeSnapshot.id+'/messages';
+    const d=await api(url,{method:'POST',body:JSON.stringify({content,attachment})});
+    const saved=d.message;
+    state.messages=state.messages.filter(m=>m.id!==tempId);
+    if(state.active?.type===activeSnapshot.type&&state.active?.id===activeSnapshot.id&&saved&&!state.messages.some(m=>m.id===saved.id)){
+      state.messages.push(saved);
+      state.messages=state.messages.slice(-100);
+    }
+    renderMessages();
+    refreshConversations();
+  }catch{
+    state.messages=state.messages.filter(m=>m.id!==tempId);
+    if(state.active?.type===activeSnapshot.type&&state.active?.id===activeSnapshot.id){
+      if(!$('#messageInput').value)$('#messageInput').value=content;
+      if(!state.pendingAttachment&&attachment)state.pendingAttachment=attachment;
+      renderAttachmentDraft();
+      resizeComposer();
+      renderMessages();
+    }
+    toast('SEND FAILED','Your message was restored so you can try again.');
+  }
+}
 async function deleteMessage(id){if(!state.active)return;try{const url=state.active.type==='dm'?`/api/messages/${id}`:`/api/groups/${state.active.id}/messages/${id}`;await api(url,{method:'DELETE'})}catch{toast('DELETE FAILED')}}
 function composerInput(){resizeComposer();if(!state.active||!state.socket)return;state.socket.emit('typing:start',{to:state.active.id,type:state.active.type});clearTimeout(state.typingTimer);state.typingTimer=setTimeout(stopTyping,900)}
 function resizeComposer(){const el=$('#messageInput');el.style.height='auto';el.style.height=Math.min(120,el.scrollHeight)+'px'}
@@ -118,8 +170,70 @@ function renderAttachmentDraft(){const el=$('#attachmentDraft');if(!state.pendin
 
 function openNewGroup(){const friends=buckets().accepted.map(r=>r.user);if(!friends.length)return toast('ADD FRIENDS FIRST');openModal('NEW GROUP',`<form id="groupForm" class="modal-form"><label>GROUP NAME<input id="groupName" maxlength="40" placeholder="GROUP CHAT"></label><div class="select-list">${friends.map(u=>`<label class="select-user"><input type="checkbox" value="${u.id}">${avatarHtml(u)}<span><b>${esc(u.display_name)}</b><small>@${esc(u.username)}</small></span></label>`).join('')}</div><button class="primary" type="submit">CREATE GROUP</button></form>`);$('#groupForm').onsubmit=async e=>{e.preventDefault();const memberIds=$$('#groupForm input[type=checkbox]:checked').map(x=>x.value);if(!memberIds.length)return toast('CHOOSE A FRIEND');try{const d=await api('/api/groups',{method:'POST',body:JSON.stringify({name:$('#groupName').value,memberIds})});closeModal();await refreshConversations();openConversation('group',d.group.id)}catch{toast('GROUP FAILED')}}}
 
-function openSettings(){openModal('SETTINGS',`<form id="settingsForm" class="modal-form"><label>DISPLAY NAME<input id="settingsDisplay" maxlength="40" value="${esc(state.me.display_name)}"></label><label>STATUS<input id="settingsCustom" maxlength="80" value="${esc(state.me.custom_status||'')}" placeholder="STATUS"></label><label>AVATAR URL<input id="settingsAvatarUrl" type="url" value="${esc(state.me.avatar_url||'')}" placeholder="HTTPS://"></label><div class="settings-actions">${['admin','mod'].includes(state.me.role)?'<button class="secondary" type="button" id="openAdminFromSettings">ADMIN PANEL</button>':''}<button class="primary" type="submit">SAVE</button><button class="danger" type="button" id="logoutBtn">LOG OUT</button></div></form>`);$('#settingsForm').onsubmit=saveSettings;$('#logoutBtn').onclick=logout;$('#openAdminFromSettings')?.addEventListener('click',()=>{closeModal();openAdminPanel()})}
-async function saveSettings(e){e.preventDefault();try{const d=await api('/api/me',{method:'PATCH',body:JSON.stringify({displayName:$('#settingsDisplay').value,customStatus:$('#settingsCustom').value,avatarUrl:$('#settingsAvatarUrl').value})});state.me=d.user;renderMe();closeModal();toast('SAVED')}catch{toast('SAVE FAILED')}}
+function openSettings(){
+  openModal('SETTINGS',`<form id="settingsForm" class="modal-form">
+    <label>DISPLAY NAME<input id="settingsDisplay" maxlength="40" value="${esc(state.me.display_name)}"></label>
+    <label>STATUS<input id="settingsCustom" maxlength="80" value="${esc(state.me.custom_status||'')}" placeholder="STATUS"></label>
+    <label>PROFILE PICTURE
+      <div class="profile-picker">
+        <span id="settingsAvatarPreview" class="profile-preview"></span>
+        <div class="profile-picker-actions">
+          <input id="settingsAvatarFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+          <input id="settingsAvatarUrl" type="hidden" value="${esc(state.me.avatar_url||'')}">
+          <button id="chooseAvatarBtn" class="secondary" type="button">CHOOSE IMAGE</button>
+          <button id="removeAvatarBtn" class="avatar-remove" type="button">REMOVE</button>
+          <small>PNG, JPG, WEBP OR GIF · MAX 5 MB</small>
+        </div>
+      </div>
+    </label>
+    <div class="settings-actions">${['admin','mod'].includes(state.me.role)?'<button class="secondary" type="button" id="openAdminFromSettings">ADMIN PANEL</button>':''}<button class="primary" type="submit">SAVE</button><button class="danger" type="button" id="logoutBtn">LOG OUT</button></div>
+  </form>`);
+  const preview=$('#settingsAvatarPreview');
+  applyAvatar(preview,{...state.me,avatar_url:$('#settingsAvatarUrl').value});
+  $('#chooseAvatarBtn').onclick=()=>$('#settingsAvatarFile').click();
+  $('#settingsAvatarFile').onchange=()=>{const file=$('#settingsAvatarFile').files?.[0];if(file)uploadProfileAvatar(file)};
+  $('#removeAvatarBtn').onclick=()=>{$('#settingsAvatarUrl').value='';applyAvatar(preview,{...state.me,avatar_url:null})};
+  $('#settingsForm').onsubmit=saveSettings;
+  $('#logoutBtn').onclick=logout;
+  $('#openAdminFromSettings')?.addEventListener('click',()=>{closeModal();openAdminPanel()});
+}
+async function uploadProfileAvatar(file){
+  if(!file.type.startsWith('image/'))return toast('IMAGE ONLY');
+  if(file.size>5*1024*1024)return toast('IMAGE TOO LARGE','Maximum 5 MB.');
+  const button=$('#chooseAvatarBtn');
+  if(button){button.disabled=true;button.textContent='UPLOADING...'}
+  const reader=new FileReader();
+  reader.onload=async()=>{
+    try{
+      const d=await api('/api/uploads/image',{method:'POST',body:JSON.stringify({dataUrl:reader.result,name:file.name})});
+      const url=d.attachment?.url||'';
+      $('#settingsAvatarUrl').value=url;
+      applyAvatar($('#settingsAvatarPreview'),{...state.me,avatar_url:url});
+      toast('PROFILE IMAGE READY','Click SAVE to use it.');
+    }catch{
+      toast('UPLOAD FAILED');
+    }finally{
+      if(button){button.disabled=false;button.textContent='CHOOSE IMAGE'}
+    }
+  };
+  reader.readAsDataURL(file);
+}
+async function saveSettings(e){
+  e.preventDefault();
+  try{
+    const d=await api('/api/me',{method:'PATCH',body:JSON.stringify({
+      displayName:$('#settingsDisplay').value,
+      customStatus:$('#settingsCustom').value,
+      avatarUrl:$('#settingsAvatarUrl').value
+    })});
+    state.me=d.user;
+    state.messageUsers[state.me.id]=state.me;
+    renderMe();
+    if(state.active?.type==='dm'&&state.active.id===state.me.id)renderMessages();
+    closeModal();
+    toast('SAVED');
+  }catch{toast('SAVE FAILED')}
+}
 async function logout(){await api('/api/auth/logout',{method:'POST'});location.reload()}
 
 async function openAdminPanel(){

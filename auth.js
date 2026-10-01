@@ -1,9 +1,9 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('node:crypto');
 
-const MASTER_PASSCODE = 'boisverysigma123';
-const GATE_VERSION = 'relay-site-code-v3';
+const GATE_VERSION = 'relay-site-code-v4';
 const secret = () => process.env.JWT_SECRET || 'dev-only-change-me';
+const sitePasscodeValue = () => process.env.SITE_ACCESS_CODE || 'boisverysigma123';
 
 function sign(payload, expiresIn = '7d') {
   return jwt.sign(payload, secret(), { expiresIn });
@@ -14,11 +14,11 @@ function verify(token) {
 }
 
 function sitePasscode() {
-  return MASTER_PASSCODE;
+  return sitePasscodeValue();
 }
 
 function gateFingerprint() {
-  return crypto.createHash('sha256').update(`${GATE_VERSION}:${MASTER_PASSCODE}`).digest('hex').slice(0, 24);
+  return crypto.createHash('sha256').update(`${GATE_VERSION}:${sitePasscodeValue()}`).digest('hex').slice(0, 24);
 }
 
 function requireGate(req, res, next) {
